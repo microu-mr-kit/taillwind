@@ -1,33 +1,50 @@
+import { unescape } from "node:querystring";
 import resolveConfig from "tailwindcss/resolveConfig";
 
-const COLOR_GRADIENT_RE = /^(?<name>[a-zA-Z0-9]+)-(?<gradient>[0-9]+)$/;
-
 export class TWConfig {
-  readonly config: any;
+  readonly _config: any;
+  readonly _colors: any;
 
   constructor(localConfig: any) {
-    this.config = resolveConfig(localConfig);
+    this._config = resolveConfig(localConfig);
+    this._colors = this._config.theme.colors;
   }
 
-  color(name: string) {
-    const m = name.match(COLOR_GRADIENT_RE);
-    if (m) {
-      const gradient_name = m.groups!["name"];
-      if (!(gradient_name in this.config.theme.colors)) {
-        return undefined;
-      }
-      const color_gradient = this.config.theme.colors[gradient_name];
-      const gradient_value = parseInt(m.groups!["gradient"]);
+  color(name: string): string | undefined {
+    const colors = this._config.theme.colors;
 
-      if (color_gradient == undefined || !(gradient_value in color_gradient)) {
-        return undefined;
-      }
+    // direct definition or default in nested
 
-      return color_gradient[gradient_value];
-    } else if (name in this.config.theme.colors) {
-      return this.config.theme.colors[name];
-    } else {
+    if (name in this._colors) {
+      const c = this._colors[name];
+      if (typeof c == "string") {
+        return c;
+      }
+      if (typeof c == "object" && "DEFAULT" in c) {
+        const dc = c["DEFAULT"];
+        return typeof dc == "string" ? dc : undefined;
+      }
       return undefined;
     }
+
+    // nested definition
+
+    const dashIndex = name.indexOf("-");
+    if (dashIndex < 0) {
+      return undefined;
+    }
+    const shadeName = name.slice(0, dashIndex);
+    const shadeVariant = name.slice(dashIndex + 1);
+
+    if (!(shadeName in this._colors)) {
+      return undefined;
+    }
+
+    const shadeColors = this._colors[shadeName];
+    if (typeof shadeColors != "object" || !(shadeVariant in shadeColors)) {
+      return undefined;
+    }
+    const c = shadeColors[shadeVariant];
+    return typeof c == "string" ? c : undefined;
   }
 }
